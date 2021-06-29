@@ -33,4 +33,4 @@ Dealing with missing data:
   if an item is at the end of the data (very first or very last day) it uses the closes available day in the other direction
   
 Calculating the average:
-- The weighted average is the the temperature from each city multiplied by it's population divided by totalPopulation (IMPORTANT: totalPop is only taken from the cities we actually use)
+- The weighted average is the the temperature from each city multiplied by it's population then divided by the total population (IMPORTANT: totalPop is only taken from the cities we actually use)
