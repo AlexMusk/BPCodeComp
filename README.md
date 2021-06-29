@@ -31,3 +31,6 @@ Dealing with missing data:
   could come up with a more complex solution for spans of 2+ days without data but since this does not appear in the sample it seems redundant
   
   if an item is at the end of the data (very first or very last day) it uses the closes available day in the other direction
+  
+Calculating the average:
+- The weighted average is the the temperature from each city multiplied by it's population divided by totalPopulation (IMPORTANT: totalPop is only taken from the cities we actually use)
