@@ -22,7 +22,7 @@ First Check the data is as I expect it to be:
   
 Dealing with missing data:
 - scan for dates with no data then fill in with the average of values at the closest before data and closes after data ( (a+b)/2 )
-- 
+ 
   could come up with a more complex solution for spans of 2+ days without data but since this does not appear in the sample it seems redundant
   
   if an item is at the end of the data (very first or very last day) it uses the closes available day in the other direction
