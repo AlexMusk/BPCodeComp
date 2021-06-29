@@ -68,7 +68,8 @@ with open('Population Data.csv', newline='') as csvfile:
    reader = csv.reader(csvfile)
    next(reader)
    for row in reader:
-      city = row[0];
+      city = row[0]
+      #we only have a uniqueName if they submitted data so only create a lookup for those items
       if city in uniqueNames:
          pop = float(row[2])
          popLookup[city] = pop
@@ -358,4 +359,4 @@ fig.update_layout(
    ]
 )
 
-fig.show()
+fig.write_html("webview.html")
