@@ -5,6 +5,7 @@ My submission for @bp22's coding contest
 First Check the data is as I expect it to be:
 - Do any cities have multiple weather stations?
   yes: Portland: {'KPWM', 'KPDX'}
+  
   solution: take the average temperature between the two weather stations and use that as one single value for portland
   
 - Do any cities report multiple times in one day?
