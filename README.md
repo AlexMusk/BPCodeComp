@@ -26,7 +26,7 @@ First Check the data is as I expect it to be:
   solution: ignore them - I hope it's not a cop out but the brief did specify "using only this data"
   
 Dealing with missing data:
-- scan for dates with no data then fill in with the average of values at the closest before data and closes after data ( (a+b)/2 )
+- scan for dates with no data then fill in with the average of values at the closest before date and closes after date ( (a+b)/2 )
  
   could come up with a more complex solution for spans of 2+ days without data but since this does not appear in the sample it seems redundant
   
@@ -34,3 +34,9 @@ Dealing with missing data:
   
 Calculating the average:
 - The weighted average is the the temperature from each city multiplied by it's population then divided by the total population (IMPORTANT: totalPop is only taken from the cities we actually use)
+
+
+
+footnotes:
+
+learn chinese so I never get 'date' and 'data' mixed up again :)
