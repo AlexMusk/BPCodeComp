@@ -4,14 +4,17 @@ My submission for @bp22's coding contest
 
 First Check the data is as I expect it to be:
 - Do any cities have multiple weather stations?
+
   yes: Portland: {'KPWM', 'KPDX'}
   
   solution: take the average temperature between the two weather stations and use that as one single value for portland
   
 - Do any cities report multiple times in one day?
+
   no
   
 - Do all of the reported temperatures have population data?
+
   no: {'NYC/LaGuardia', 'Windsor Locks', 'Covington', 'Wash DC/Dulles', 'Phoenix/Sky HRBR', 'Detroit/Wayne', "Chicago O'Hare", 'St Louis/Lambert', 'Sacramento/Execu', 'Raleigh/Durham', 'Albany'}
   all report data but do not have a population count to lookup
   
