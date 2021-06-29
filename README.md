@@ -12,7 +12,7 @@ First Check the data is as I expect it to be:
   
 - Do all of the reported temperatures have population data?
   no: {'NYC/LaGuardia', 'Windsor Locks', 'Covington', 'Wash DC/Dulles', 'Phoenix/Sky HRBR', 'Detroit/Wayne', "Chicago O'Hare", 'St Louis/Lambert', 'Sacramento/Execu', 'Raleigh/Durham', 'Albany'}
-  all report data but to not have a population to lookup
+  all report data but do not have a population count to lookup
   solution: ignore them - I hope it's not a cop out but the brief did specify "using only this data"
   
 Dealing with missing data:
