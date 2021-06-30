@@ -27,14 +27,15 @@ __Dependancies:__
 ### Dealing with missing data:
 * Scan for dates with no data then fill in with the average of values at the previous date and closest following date ( (a+b)/2 )
 * could come up with a more complex solution for spans of 2+ days without data but since this Does not appear in the sample it seems redundant
-* If an item is at the end of the data (very first or very last day) it uses the closes available day in the other direction
+* If an item is at the end of the data (very first or very last day) it uses the closest available day in the other direction
 
 ### Calculating the weighted average:
 
 * The weighted average is the sum of the temperatures from each population zone multiplied by their population then divided by the total population <s>(IMPORTANT: totalPop is only taken from the cities we actually use)</s> _(I now use all population data)_
 
 ### Potential Improvements:
-* In this version I take the population zones temperature to be the weather station with the same name or the weather station whose name is geographically closest the the zone.
+* In this version I take the population zone's temperature to be the weather station with the same name or the weather station whose name is geographically closest the the zone.
 * Using exact coordinates of each station it might be possible to average available temperature data to estimate the temperature at the exact lat/lon of the population zone's center.
 * Accuracy could also obviously be improved by using more weather station data, which seems to be publicly available.
+
 ##### footnotes: learn chinese so I never get 'date' and 'data' mixed up again :)
