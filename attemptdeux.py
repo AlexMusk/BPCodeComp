@@ -186,6 +186,11 @@ def healData(data):
       dateLookup = { x[2]: x for x in data }
 
       for m in misses:
+         dif = getAfter(dateLookup, m)-getBefore(dateLookup, m)
+         if dif < ONE_DAY:
+            print(data[0][0])
+            print(dif)
+
          beforeData = dateLookup[getBefore(dateLookup, m)]
          afterData = dateLookup[getAfter(dateLookup, m)]
 
@@ -267,6 +272,7 @@ monthMax = defaultdict(float)
 monthDates = defaultdict(list)
 monthAbsMin = {}
 monthAbsMax = {}
+monthLabels = {}
 
 seasonAvg = defaultdict(float)
 seasonMin = defaultdict(float)
@@ -274,23 +280,47 @@ seasonMax = defaultdict(float)
 seasonDates = defaultdict(list)
 seasonAbsMin = {}
 seasonAbsMax = {}
+seasonLabels = {}
+
+yearAvg = defaultdict(float)
+yearMin = defaultdict(float)
+yearMax = defaultdict(float)
+yearDates = defaultdict(list)
+yearAbsMin = {}
+yearAbsMax = {}
+yearLabels = {}
+
+seasonNames = [ "Spring", "Summer", "Autumn", "Winter" ]
 
 while theDay <= lastDay:
-   monthIndex = theDay.month + ((theDay.year-2015)*12)
+   #todo modularise this?
+   monthIndex = theDay.month + ((theDay.year-firstDay.year)*12)
    monthAvg[monthIndex] += totalAvg[theDay]
    monthMin[monthIndex] += totalMin[theDay]
    monthMax[monthIndex] += totalMax[theDay]
    monthAbsMin[monthIndex] = min(monthAbsMin.get(monthIndex, totalMin[theDay]), totalMin[theDay]);
    monthAbsMax[monthIndex] = max(monthAbsMax.get(monthIndex, totalMax[theDay]), totalMax[theDay]);
    monthDates[monthIndex].append(theDay)
+   monthLabels[monthIndex] = theDay.strftime("%B %Y") #yes it sets the same value every loop but it's neater than doing it separately
 
-   seasonIndex = math.floor((theDay.month+1)/3) + ((theDay.year-2015)*4)
+   season = math.floor((theDay.month+1)/3)-1
+   seasonIndex = season + ((theDay.year-firstDay.year)*4)
    seasonAvg[seasonIndex] += totalAvg[theDay]
    seasonMin[seasonIndex] += totalMin[theDay]
    seasonMax[seasonIndex] += totalMax[theDay]
    seasonAbsMin[seasonIndex] = min(seasonAbsMin.get(seasonIndex, totalMin[theDay]), totalMin[theDay]);
    seasonAbsMax[seasonIndex] = max(seasonAbsMax.get(seasonIndex, totalMax[theDay]), totalMax[theDay]);
    seasonDates[seasonIndex].append(theDay)
+   seasonLabels[seasonIndex] = seasonNames[season] + theDay.strftime(" %Y")
+
+   yearIndex = theDay.year-firstDay.year
+   yearAvg[yearIndex] += totalAvg[theDay]
+   yearMin[yearIndex] += totalMin[theDay]
+   yearMax[yearIndex] += totalMax[theDay]
+   yearAbsMin[yearIndex] = min(yearAbsMin.get(yearIndex, totalMin[theDay]), totalMin[theDay]);
+   yearAbsMax[yearIndex] = max(yearAbsMax.get(yearIndex, totalMax[theDay]), totalMax[theDay]);
+   yearDates[yearIndex].append(theDay)
+   yearLabels[yearIndex] = theDay.strftime("%Y")
 
    theDay += ONE_DAY
 
@@ -310,12 +340,15 @@ COLOR_MIN = "blue"
 COLOR_ABS_MAX = "darkred"
 COLOR_ABS_MIN = "darkcyan"
 COLOR_ERROR_LINE = "darkslategrey"
+INFO_BOX_COLOR = "lightblue"
 WIDTH_OF_TRACE = 1
 WIDTH_OF_TRENDS = 2
 WIDTH_OF_MAX = 2
 WIDTH_OF_ERROR_BAR = 1
-WIDTH_OF_SEPARATORS = 0.4
 DATA_TAG_FORMAT = "%{y:.2f}°C"
+TEMP_TOP = 40
+TEMP_BOTTOM = -10
+
 
 fig = go.Figure()
 buttons = []
@@ -323,7 +356,7 @@ buttons = []
 def trends(averages, dates, label, color):
    count = 0
 
-   for k, v in averages:
+   for k, v in averages.items():
       days = dates[k]
       x= days
       y = [v/len(days)]*len(x)
@@ -334,7 +367,7 @@ def trends(averages, dates, label, color):
 def trendsMax(averages, dates, label, color):
    count = 0
 
-   for k, val in averages:
+   for k, val in averages.items():
       days = dates[k]
       x= days
       y = [val]*len(x)
@@ -342,13 +375,16 @@ def trendsMax(averages, dates, label, color):
       count += 1
    return count
 
-def separatorLines(dates):
-   output = []
+def trendsInfo(dates, labels):
+   count = 0
 
-   for days in dates.values():
-      d2 = days[-1]+ONE_DAY
-      output.append(dict(type="line", x0=d2.isoformat(), y0=-10, x1=d2.isoformat(), y1=40, line=dict(color=COLOR_SEPARATOR, width=WIDTH_OF_SEPARATORS)))
-   return output;
+   for k, val in dates.items():
+      x = val
+      y = [TEMP_TOP]*len(x)
+      tag = "<b>" + labels[k] + "</b><br><span style='font-size: 12px;'>" + dateStr(min(val)) + " - " + dateStr(max(val)) + "</span><extra></extra>"
+      fig.add_trace(go.Scatter(dict(x=x, y=y, mode='lines', line_color=INFO_BOX_COLOR, hovertemplate=tag, showlegend=False, visible=False, line=dict(width=0))))
+      count += 1
+   return count
 
 lineCount = 3
 
@@ -363,31 +399,42 @@ for k,v in healedDatesLookup.items():
          count += 1
    tag += v[-1] + "</span><extra></extra>"
 
-   fig.add_trace(go.Scatter(x=[k,k], y=[-10, 40], mode='lines', line_color=COLOR_ERROR_LINE, showlegend=False, hovertemplate = tag, line=dict(width=WIDTH_OF_ERROR_BAR)))
+   fig.add_trace(go.Scatter(x=[k,k], y=[TEMP_BOTTOM,TEMP_TOP], mode='lines', line_color=COLOR_ERROR_LINE, showlegend=False, hovertemplate=tag, line=dict(width=WIDTH_OF_ERROR_BAR)))
    lineCount += 1
 
 fig.add_trace(go.Scatter(x=orderedDates, y=[v for [k,v] in sorted(totalMax.items(), key=(lambda x: x[0]))], hovertemplate=DATA_TAG_FORMAT, mode='lines', line_color=COLOR_MAX_LINE, name="Max Temp (day)", line=dict(width=WIDTH_OF_TRACE)))
 fig.add_trace(go.Scatter(x=orderedDates, y=[v for [k,v] in sorted(totalAvg.items(), key=(lambda x: x[0]))], hovertemplate=DATA_TAG_FORMAT, mode='lines', line_color=COLOR_AVG_LINE, name="Mean Temp (day)", line=dict(width=WIDTH_OF_TRACE)))
 fig.add_trace(go.Scatter(x=orderedDates, y=[v for [k,v] in sorted(totalMin.items(), key=(lambda x: x[0]))], hovertemplate=DATA_TAG_FORMAT, mode='lines', line_color=COLOR_MIN_LINE, name="Min Temp (day)", line=dict(width=WIDTH_OF_TRACE)))
 
-monthCount = trendsMax(monthAbsMax.items(), monthDates, "Monthly Peak", COLOR_ABS_MAX) \
-   + trends(monthMax.items(), monthDates, "Max Average (Month)", COLOR_MAX) \
-   + trends(monthAvg.items(), monthDates, "Mean Average (Month)", COLOR_AVG) \
-   + trends(monthMin.items(), monthDates, "Min Average (Month)", COLOR_MIN) \
-   + trendsMax(monthAbsMin.items(), monthDates, "Monthly Trough", COLOR_ABS_MIN)
+monthCount = trendsMax(monthAbsMax, monthDates, "Monthly Peak", COLOR_ABS_MAX) \
+   + trends(monthMax, monthDates, "Max Average (Month)", COLOR_MAX) \
+   + trends(monthAvg, monthDates, "Mean Average (Month)", COLOR_AVG) \
+   + trends(monthMin, monthDates, "Min Average (Month)", COLOR_MIN) \
+   + trendsMax(monthAbsMin, monthDates, "Monthly Trough", COLOR_ABS_MIN) \
+   + trendsInfo(monthDates, monthLabels)
 
-seasonCount = trendsMax(seasonAbsMax.items(), seasonDates, "Seasonal Peak", COLOR_ABS_MAX) \
-   + trends(seasonMax.items(), seasonDates, "Max Average (Season)", COLOR_MAX) \
-   + trends(seasonAvg.items(), seasonDates, "Mean Average (Season)", COLOR_AVG) \
-   + trends(seasonMin.items(), seasonDates, "Min Average (Season)", COLOR_MIN) \
-   + trendsMax(seasonAbsMin.items(), seasonDates, "Seasonal Trough", COLOR_ABS_MIN)
+seasonCount = trendsMax(seasonAbsMax, seasonDates, "Seasonal Peak", COLOR_ABS_MAX) \
+   + trends(seasonMax, seasonDates, "Max Average (Season)", COLOR_MAX) \
+   + trends(seasonAvg, seasonDates, "Mean Average (Season)", COLOR_AVG) \
+   + trends(seasonMin, seasonDates, "Min Average (Season)", COLOR_MIN) \
+   + trendsMax(seasonAbsMin, seasonDates, "Seasonal Trough", COLOR_ABS_MIN) \
+   + trendsInfo(seasonDates, seasonLabels)
 
+yearCount = trendsMax(yearAbsMax, yearDates, "yearly Peak", COLOR_ABS_MAX) \
+   + trends(yearMax, yearDates, "Max Average (year)", COLOR_MAX) \
+   + trends(yearAvg, yearDates, "Mean Average (year)", COLOR_AVG) \
+   + trends(yearMin, yearDates, "Min Average (year)", COLOR_MIN) \
+   + trendsMax(yearAbsMin, yearDates, "yearly Trough", COLOR_ABS_MIN) \
+   + trendsInfo(yearDates, yearLabels)
+   
 buttons.append(dict(label = 'Show Monthly Averages', method = 'update',
-args = [{'visible': [True]*lineCount + [True]*monthCount + [False]*seasonCount}]))
+args = [{ 'visible': [True]*lineCount + [True]*monthCount + [False]*seasonCount + [False]*yearCount }]))
 buttons.append(dict(label = 'Show Seasonal Averages', method = 'update',
-args = [{'visible': [True]*lineCount + [False]*monthCount + [True]*seasonCount}]))
+args = [{ 'visible': [True]*lineCount + [False]*monthCount + [True]*seasonCount + [False]*yearCount }]))
+buttons.append(dict(label = 'Show Yearly Averages', method = 'update',
+args = [{ 'visible': [True]*lineCount + [False]*monthCount + [False]*seasonCount + [True]*yearCount }]))
 buttons.append(dict(label = 'Hide Averages', method = 'update',
-args = [{'visible': [True]*lineCount + [False]*monthCount + [False]*seasonCount}]))
+args = [{ 'visible': [True]*lineCount + [False]*monthCount + [False]*seasonCount + [False]*yearCount }]))
 
 fig.update_xaxes(showspikes=True, spikecolor="grey", spikethickness=1, spikemode="across")
 
@@ -418,5 +465,5 @@ fig.update_layout(
    ]
 )
 
-fig.show()
-#fig.write_html("webview.html")
+#fig.show()
+fig.write_html("webview.html")
