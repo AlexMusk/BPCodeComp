@@ -3,7 +3,9 @@
 
 ### My submission for @bp22's coding contest
 
-__interactive graph:__ https://htmlpreview.github.io/?https://github.com/AlexMusk/BPCodeComp/blob/main/webview.html
+__Interactive Graph:__ https://htmlpreview.github.io/?https://github.com/AlexMusk/BPCodeComp/blob/main/webview.html
+
+__Cities/Stations Map:__ https://htmlpreview.github.io/?https://github.com/AlexMusk/BPCodeComp/blob/main/mapview.html
 
 __Dependancies:__
 * plotly (https://plotly.com/python/getting-started/)

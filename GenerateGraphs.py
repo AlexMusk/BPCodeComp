@@ -60,10 +60,19 @@ def dateStr(d):
 #City (0), Station Code (1), Date (2), Mean Temp (3), Min Temp (4), Max temp (5)
 temperatureData = []
 
+# List of all names that submit temperature data
 allNames = []
+# List of all station codes that submit temperature data
+allCodes = []
+# List of all dates that temperature data was submitted
 allDates = []
-stations = defaultdict(list)
-dates = defaultdict(list)
+
+# For checking if any names have multiple stations
+# name : [ stnCodes ]
+stationCodesPerName = defaultdict(list)
+# For checking if any stations report twice on the same date
+# date : [ stnCodes ]
+stationCodesPerDate = defaultdict(list)
 
 nameReplacementLookup = {
    "Chicago O'Hare": "Chicago",
@@ -89,35 +98,38 @@ with open('data/Temperature Data.csv', newline='') as csvfile:
       # Ignore albany as explained above
       if name != 'Albany':
          date = datetime.strptime(row[5], "%m/%d/%Y")
-         data = [name, row[4], date] + list(map(float, row[6:]))
+         stnCode = row[4]
+
+         data = [name, stnCode, date] + list(map(float, row[6:]))
          temperatureData.append(data)
          allNames.append(name)
+         allCodes.append(stnCode)
          allDates.append(date)
-         stations[name].append(row[4])
-         dates[date].append(row[4])
+         stationCodesPerName[name].append(stnCode)
+         stationCodesPerDate[date].append(stnCode)
 
 # Check for cities with multiple stations, there is one:
 # Portland: {'KPWM', 'KPDX'}
 # Washington: {'KDCA', 'KIAD'} in v2
-for k, v in stations.items():
-   uniqueStations = set(v)
+for stnName, stnCodes in stationCodesPerName.items():
+   uniqueStations = set(stnCodes)
    if len(uniqueStations) > 1:
-      print(k + ": " + str(uniqueStations))
+      print(stnName + ": " + str(uniqueStations))
 
 # Check if any cities reported twice in one day
 # (they don't)
-for k, v in dates.items():
+for date, stnCodes in stationCodesPerDate.items():
    seen = {}
    dupes = []
-   for x in v:
-    if x not in seen:
-        seen[x] = True
+   for stn in stnCodes:
+    if stn not in seen:
+        seen[stn] = True
     else:
-        if seen[x] == True:
-            dupes.append(x)
+        if seen[stn] == True:
+            dupes.append(stn)
 
    if len(dupes) > 0:
-      print(dateStr(k) + ": " + str(dupes))
+      print(dateStr(date) + ": " + str(dupes))
 
 # city names of all the weather stations that submitted data
 uniqueNames = sorted(set(allNames))
@@ -188,13 +200,17 @@ def healData(data):
       dateLookup = { x[2]: x for x in data }
 
       for m in misses:
-         dif = getAfter(dateLookup, m)-getBefore(dateLookup, m)
-         if dif < ONE_DAY:
+         before = getBefore(dateLookup, m)
+         after = getAfter(dateLookup, m)
+
+         # Ensure all gaps in data are only 48 hours (one day missing)
+         dif = after - before
+         if dif != (ONE_DAY*2):
             print(data[0][0])
             print(dif)
 
-         beforeData = dateLookup[getBefore(dateLookup, m)]
-         afterData = dateLookup[getAfter(dateLookup, m)]
+         beforeData = dateLookup[before]
+         afterData = dateLookup[after]
 
          newData = [data[0][0], data[0][1], m, 
             (beforeData[3]+afterData[3])/2, 
@@ -250,26 +266,30 @@ def doTemperature(cityName, stationName):
       totalMin[day[2]] += day[4]*weight
       totalMax[day[2]] += day[5]*weight
 
+   # Append the ID of the station used so we can map it later
+   cityLookup[cityName].append(stationData[stationName][0][1])
+
 
 allStationCoords = list(stationCoordinateLookup.keys())
 # This is inefficient but list is small enough just to brute every distance
 # For thousands of entries one option would be a Quadtree
 
 # For every city we have population data for:
-for city in cityLookup.keys():
+for cityName, cityData in cityLookup.items():
    # If city is already mapped to a station
-   if city in uniqueNames:
-      doTemperature(city, city)
+   if cityName in uniqueNames:
+      doTemperature(cityName, cityName)
    # Else find the closest station and use it's values
    else:
-      distances = sorted(map(lambda c : [c, haversine(c, cityLookup[city][2])], allStationCoords), key=lambda x : x[1])
+      distances = sorted(map(lambda c : [c, haversine(c, cityData[2])], allStationCoords), key=lambda x : x[1])
       
       # just use closest value (could use N values then average for better accuracy?)
       # but direction is important so would mean finding the center of different groups then comparing those distances;
       # seems computationally expensive for something i've not researched, will look into it for version 3
       first = distances[0]
       closestStation = stationCoordinateLookup[first[0]]
-      doTemperature(city, closestStation)
+      doTemperature(cityName, closestStation)
+
 
 theDay = firstDay
 monthAvg = defaultdict(float)
@@ -475,3 +495,64 @@ fig.update_layout(
 
 fig.show()
 #fig.write_html("webview.html")
+
+### Show the locations of stations and population centers on a map ###
+# Each population is coloured by which weather station they get their temperature data from
+
+import plotly.express as px
+
+BUBBLE_SCALE = 5000
+UNIQUE_COLORS = (px.colors.qualitative.Plotly)*4
+TOP_LEFT = cityLookup['Seattle'][2]
+
+# Sort the station codes by distance from the top left most location then map them to a color
+# Creating a graph and applying the 4 color theory would be better for the general case but this works fine for our data
+sortedStnCodes = list(map(lambda x : stationData[stationCoordinateLookup[x]][0][1], sorted(allStationCoords, key=lambda x : haversine(x, TOP_LEFT))))
+colorLookup = { x[0]: x[1] for x in zip(sortedStnCodes, UNIQUE_COLORS) }
+
+mapData = { data[3]: [[],[],[],[],[],[],[]] for data in cityLookup.values() }
+
+# Extract the data - starting to wish I'd used pandas from the start
+for city, data in cityLookup.items():
+   isStation = city in uniqueNames
+   stnCode = data[3]
+
+   stnStr = ("<b>Station Code: " if isStation else "Nearest Station: ") + stnCode
+   mapData[stnCode][0].append("<b>" + city + ", " + data[0] + "</b><br>" + "{:,.0f}".format(data[1]) + " people<br><i>" + stnStr + "</b></i><extra></extra>")
+   mapData[stnCode][1].append(data[2][0])
+   mapData[stnCode][2].append(data[2][1])
+   mapData[stnCode][3].append(data[1]/BUBBLE_SCALE)
+   mapData[stnCode][4].append(1 if isStation else 0.5)
+   mapData[stnCode][5].append(colorLookup[stnCode])
+   mapData[stnCode][6].append('circle-x' if isStation else 'circle')
+
+geoFig = go.Figure()
+
+for stnCode, data in mapData.items():
+   geoFig.add_trace(go.Scattergeo(
+      locationmode = 'USA-states',
+      hovertemplate = data[0],
+      lat = data[1],
+      lon = data[2],
+      marker = dict(
+         sizemode = 'area',
+         size = data[3],
+         line_width = data[4],
+         line_color = 'darkslategrey',
+         color = data[5],
+         symbol = data[6]
+      ),
+      name = stnCode
+   ))
+
+geoFig.update_layout(
+   title_text = 'Weather Stations and Population Centers',
+   showlegend = False,
+   geo = dict(
+      scope = 'usa',
+      landcolor = 'rgb(217, 217, 217)'
+   )
+)
+
+geoFig.show()
+#geoFig.write_html("mapview.html")
