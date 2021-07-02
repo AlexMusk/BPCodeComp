@@ -1,0 +1,63 @@
+<html>
+<head>
+<title>Distance Equation Toy</title>
+<head>
+<body style="margin: 0; overflow: hidden">
+<p id="textBox" style="padding: 3px; padding-left: 6px; height:20px">
+	I was finding it difficult to visualise the population estimation for the weather stations so I made this. Hover the mouse to see how size changes with proximity to points. More points can be added in the file [x, y, size]<br>
+	As the mouse approches infinity it tends towards to average size of all points because their influence is minimised.
+</p>
+<canvas id="myCanvas"></canvas>
+<script>
+	const canvas = document.getElementById("myCanvas");
+	canvas.width = window.innerWidth
+	canvas.height = window.innerHeight
+   const rect = canvas.getBoundingClientRect();
+	const ctx = canvas.getContext('2d');
+	canvas.style.backgroundColor = "black";
+	canvas.style.cursor = "none";
+	ctx.font = "14px Arial";
+	ctx.textAlign = "center";
+
+	const POINTS = [[200, 200, 80], [400, 700, 20], [700, 700, 50], [200, 500, 10], [800, 100, 40], [400, 400, 10]];//, [0, 0, 0], [1000, 0, 0], [0, 1000, 0], [1000, 1000, 0]];
+
+	const avg = POINTS.reduce((prev, curr) => prev+curr[2], 0)/POINTS.length;
+	document.getElementById("textBox").innerHTML += " (Average: " + avg.toFixed(2) + ")";
+
+	function circle(x, y, size, color, hideText=false) {
+		ctx.fillStyle = color;
+		ctx.beginPath();
+		ctx.arc(x, y, size, 0, 2*Math.PI, false);
+		ctx.fill();
+		ctx.closePath();
+
+		if(hideText) return;
+
+		ctx.fillStyle = "white";
+		ctx.fillText(size.toFixed(2), x, y-4-size);
+		ctx.fillText("(" + x + "," + y + ")", x, y+size+20);
+	}
+
+	canvas.onmousemove = function({clientX, clientY}) {
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+		const mx = clientX-rect.left, my = clientY-rect.top
+		let pointerSize = 0
+		let totalDist = 0
+
+		for(let [px, py, pr] of POINTS) {
+			circle(px, py, pr, "blue");
+
+			let d = Math.sqrt(Math.pow(mx-px, 2) + Math.pow(my-py, 2));
+			pointerSize += pr/d;
+			totalDist += 1/d;
+		}
+
+		circle(mx, my, pointerSize/totalDist, "red");
+		circle(mx, my, 1, "white", true);
+	}
+
+	canvas.onmousemove({clientX: 500, clientY: 500});
+</script>
+</body>
+</html>
