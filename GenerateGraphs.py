@@ -49,6 +49,8 @@ from collections import defaultdict
 import plotly.graph_objects as go
 import math
 from haversine import haversine
+import plotly.express as px
+import pandas as pd
 
 ONE_DAY = timedelta(days=1)
 US_DATE_FORMAT = "%m/%d/%Y"
@@ -57,7 +59,7 @@ UK_DATE_FORMAT = "%d/%m/%Y"
 def dateStr(d):
    return d.strftime(US_DATE_FORMAT)
 
-#City (0), Station Code (1), Date (2), Mean Temp (3), Min Temp (4), Max temp (5)
+#Station Code(0), Date (1), Mean Temp (2), Min Temp (3), Max temp (4)
 temperatureData = []
 
 # List of all names that submit temperature data
@@ -67,72 +69,20 @@ allCodes = []
 # List of all dates that temperature data was submitted
 allDates = []
 
-# For checking if any names have multiple stations
-# name : [ stnCodes ]
-stationCodesPerName = defaultdict(list)
-# For checking if any stations report twice on the same date
-# date : [ stnCodes ]
-stationCodesPerDate = defaultdict(list)
-
-nameReplacementLookup = {
-   "Chicago O'Hare": "Chicago",
-   "Detroit/Wayne": "Detroit",
-   "Phoenix/Sky HRBR": "Phoenix",
-   "Sacramento/Execu": "Sacramento",
-   "St Louis/Lambert": "St. Louis",
-   "Wash DC/Dulles": "Washington",
-   "Raleigh/Durham": "Raleigh",
-   "Windsor Locks": "Springfield",
-   "Covington": "Cincinnati",
-   "NYC/LaGuardia": "New York"
-}
-
 with open('data/Temperature Data.csv', newline='') as csvfile:
    reader = csv.reader(csvfile)
    next(reader)
 
    for row in reader:
-      # Get the replacement in the table or return the default (our input)
-      name = nameReplacementLookup.get(row[0], row[0])
+      date = datetime.strptime(row[5], "%m/%d/%Y")
+      stnCode = row[4]
 
-      # Ignore albany as explained above
-      if name != 'Albany':
-         date = datetime.strptime(row[5], "%m/%d/%Y")
-         stnCode = row[4]
+      data = [stnCode, date] + list(map(float, row[6:]))
+      temperatureData.append(data)
+      allDates.append(date)
+      allCodes.append(stnCode)
 
-         data = [name, stnCode, date] + list(map(float, row[6:]))
-         temperatureData.append(data)
-         allNames.append(name)
-         allCodes.append(stnCode)
-         allDates.append(date)
-         stationCodesPerName[name].append(stnCode)
-         stationCodesPerDate[date].append(stnCode)
 
-# Check for cities with multiple stations, there is one:
-# Portland: {'KPWM', 'KPDX'}
-# Washington: {'KDCA', 'KIAD'} in v2
-for stnName, stnCodes in stationCodesPerName.items():
-   uniqueStations = set(stnCodes)
-   if len(uniqueStations) > 1:
-      print(stnName + ": " + str(uniqueStations))
-
-# Check if any cities reported twice in one day
-# (they don't)
-for date, stnCodes in stationCodesPerDate.items():
-   seen = {}
-   dupes = []
-   for stn in stnCodes:
-    if stn not in seen:
-        seen[stn] = True
-    else:
-        if seen[stn] == True:
-            dupes.append(stn)
-
-   if len(dupes) > 0:
-      print(dateStr(date) + ": " + str(dupes))
-
-# city names of all the weather stations that submitted data
-uniqueNames = sorted(set(allNames))
 # First date to appear in the data
 firstDay = min(allDates)
 # Last date to appear in the data
@@ -144,8 +94,8 @@ orderedDates = sorted(list(map(lambda x: x.isoformat(), allDatesInRange)))
 
 # Counter for all populations loaded
 totalPop = 0
-# City: [ State (0), population (1), (Lon, Lat) (2) ]
-cityLookup = {}
+# [ [ State (0), population (1), (Lon, Lat) (2) ] ]
+cityList = []
 
 with open('data/Population Data.csv', newline='') as csvfile:
    reader = csv.reader(csvfile)
@@ -157,10 +107,7 @@ with open('data/Population Data.csv', newline='') as csvfile:
       totalPop += pop
       lon = float(row[3])
       lat = float(row[4])
-      cityLookup[city] = [ row[1], pop, (lat, lon) ]
-
-# Sanity check:
-print("Total Population: " + str(totalPop) + ", Cities: " + str(len(cityLookup)) + ", Weather Stations: " + str(len(uniqueNames)))
+      cityList.append([ row[1], pop, (lat, lon) ])
 
 # Get the date closest to (but in the past) to 'date'
 # If the we reach the earliest date in lookup then get the closest date in the other direction
@@ -193,11 +140,11 @@ healedData = []
 #could come up with a more complex algorithm for spans of 2+ days without data but since this does not appear in the sample I didn't
 #if an item is at the end of the data (very first or very last day) it uses the closes available day in the other direction
 def healData(data):
-   justDates = set(map(lambda d: d[2], data))
+   justDates = set(map(lambda d: d[1], data))
    misses = list(allDatesInRange - justDates)
 
    if len(misses) > 0:
-      dateLookup = { x[2]: x for x in data }
+      dateLookup = { x[1]: x for x in data }
 
       for m in misses:
          before = getBefore(dateLookup, m)
@@ -212,83 +159,51 @@ def healData(data):
          beforeData = dateLookup[before]
          afterData = dateLookup[after]
 
-         newData = [data[0][0], data[0][1], m, 
+         newData = [data[0][0], m, 
+            (beforeData[2]+afterData[2])/2, 
             (beforeData[3]+afterData[3])/2, 
-            (beforeData[4]+afterData[4])/2, 
-            (beforeData[5]+afterData[5])/2]
+            (beforeData[4]+afterData[4])/2]
          data.append(newData)
          healedData.append(newData)
    return data
 
-# If the tuple contains numbers return the average otherwise return first item of tuple
-def avg(tuple):
-   if type(tuple[0]) is float or type(tuple[0]) is int:
-      return float(sum(tuple)/len(tuple))
-   else:
-      return tuple[0]
+df = pd.read_csv('data\master-location-identifier-database-202106_standard.csv')
+df.head()
 
-# Create map of city name to list of all station data for that name
-# City: [ [ City (0), Station Code (1), Date (2), Mean Temp (3), Min Temp (4), Max temp (5) ] ]
-stationData = {}
-
-# Since portland has two measurements for only one population count
-# I will take the average of both measurements and add that to the weighted total only once
-KPWM = sorted(healData(list(filter(lambda x : x[1] == "KPWM", temperatureData))), key=(lambda x: x[2]))
-KPDX = sorted(healData(list(filter(lambda x : x[1] == "KPDX", temperatureData))), key=(lambda x: x[2]))
-stationData['Portland'] = [avg(item) for item in zip(KPWM, KPDX)]
-
-# Washington now has two stations after manual mapping
-KIAD = sorted(healData(list(filter(lambda x : x[1] == "KIAD", temperatureData))), key=(lambda x: x[2]))
-KDCA = sorted(healData(list(filter(lambda x : x[1] == "KDCA", temperatureData))), key=(lambda x: x[2]))
-stationData['Washington'] = [avg(item) for item in zip(KIAD, KDCA)]
-
-# (lat, lon) : cityName
-stationCoordinateLookup = {}
-
-# Call heal function on each set of data to fill in missing days and add it's coordinates/name to 'stationCoordinateLookup'
-for stationName in uniqueNames:
-   if stationName != 'Portland' and stationName != 'Washington':
-      stationData[stationName] = healData(list(filter(lambda x : x[0] == stationName, temperatureData)))
-
-   cityForStation = cityLookup[stationName]
-   stationCoordinateLookup[cityForStation[2]] = stationName
+codes = set(allCodes)
+stationLocations = df.loc[df['icao'].isin(codes)][['icao', 'lat', 'lon']].values.tolist()
 
 # Date : weighted average temperature for that date
 totalAvg = defaultdict(float)
 totalMin = defaultdict(float)
 totalMax = defaultdict(float)
 
-def doTemperature(cityName, stationName):
-   weight = cityLookup[cityName][1]/totalPop
-      
-   for day in stationData[stationName]:
-      totalAvg[day[2]] += day[3]*weight
-      totalMin[day[2]] += day[4]*weight
-      totalMax[day[2]] += day[5]*weight
+fixedData = []
+weightedPopTotal = 0
+weightedPopList = {}
 
-   # Append the ID of the station used so we can map it later
-   cityLookup[cityName].append(stationData[stationName][0][1])
+for [code, lat, lon] in stationLocations:
+   popSum = 0
+   denom = 0
+   
+   for [_, pop, cityCoord] in cityList:
+      dist = 1/haversine(cityCoord, (lat, lon))
+      popSum += dist*pop
+      denom += dist
 
+   weightedPop = popSum/denom
+   weightedPopTotal += weightedPop
+   weightedPopList[code] = weightedPop
 
-allStationCoords = list(stationCoordinateLookup.keys())
-# This is inefficient but list is small enough just to brute every distance
-# For thousands of entries one option would be a Quadtree
+for [code, lat, lon] in stationLocations:
+   data = healData(list(filter(lambda x : x[0] == code, temperatureData)))
 
-# For every city we have population data for:
-for cityName, cityData in cityLookup.items():
-   # If city is already mapped to a station
-   if cityName in uniqueNames:
-      doTemperature(cityName, cityName)
-   # Else find the closest station and use it's values
-   else:
-      distances = sorted(map(lambda c : [c, haversine(c, cityData[2])], allStationCoords), key=lambda x : x[1])
-      
-      # just use closest value (could use N values then average for better accuracy?)
-      # but direction is important so would mean finding the center of different groups then comparing those distances;
-      # seems computationally expensive for something i've not researched, will look into it for version 3
-      first = distances[0]
-      closestStation = stationCoordinateLookup[first[0]]
-      doTemperature(cityName, closestStation)
+   weight = weightedPopList[code]/weightedPopTotal
+
+   for day in data:
+      totalAvg[day[1]] += day[2]*weight
+      totalMin[day[1]] += day[3]*weight
+      totalMax[day[1]] += day[4]*weight
 
 
 theDay = firstDay
@@ -354,7 +269,7 @@ while theDay <= lastDay:
 healedDatesLookup = defaultdict(list)
 
 for d in healedData:
-   healedDatesLookup[d[2]].append(d[1])
+   healedDatesLookup[d[1]].append(d[0])
 
 # Constants for the graph
 COLOR_SEPARATOR = "grey"
@@ -374,7 +289,7 @@ WIDTH_OF_MAX = 2
 WIDTH_OF_ERROR_BAR = 1
 DATA_TAG_FORMAT = "%{y:.2f}°C"
 TEMP_TOP = 40
-TEMP_BOTTOM = -10
+TEMP_BOTTOM = -20
 
 fig = go.Figure()
 buttons = []
@@ -493,66 +408,5 @@ fig.update_layout(
    ]
 )
 
-fig.show()
-#fig.write_html("webview.html")
-
-### Show the locations of stations and population centers on a map ###
-# Each population is coloured by which weather station they get their temperature data from
-
-import plotly.express as px
-
-BUBBLE_SCALE = 5000
-UNIQUE_COLORS = (px.colors.qualitative.Plotly)*4
-TOP_LEFT = cityLookup['Seattle'][2]
-
-# Sort the station codes by distance from the top left most location then map them to a color
-# Creating a graph and applying the 4 color theory would be better for the general case but this works fine for our data
-sortedStnCodes = list(map(lambda x : stationData[stationCoordinateLookup[x]][0][1], sorted(allStationCoords, key=lambda x : haversine(x, TOP_LEFT))))
-colorLookup = { x[0]: x[1] for x in zip(sortedStnCodes, UNIQUE_COLORS) }
-
-mapData = { data[3]: [[],[],[],[],[],[],[]] for data in cityLookup.values() }
-
-# Extract the data - starting to wish I'd used pandas from the start
-for city, data in cityLookup.items():
-   isStation = city in uniqueNames
-   stnCode = data[3]
-
-   stnStr = ("<b>Station Code: " if isStation else "Nearest Station: ") + stnCode
-   mapData[stnCode][0].append("<b>" + city + ", " + data[0] + "</b><br>" + "{:,.0f}".format(data[1]) + " people<br><i>" + stnStr + "</b></i><extra></extra>")
-   mapData[stnCode][1].append(data[2][0])
-   mapData[stnCode][2].append(data[2][1])
-   mapData[stnCode][3].append(data[1]/BUBBLE_SCALE)
-   mapData[stnCode][4].append(1 if isStation else 0.5)
-   mapData[stnCode][5].append(colorLookup[stnCode])
-   mapData[stnCode][6].append('circle-x' if isStation else 'circle')
-
-geoFig = go.Figure()
-
-for stnCode, data in mapData.items():
-   geoFig.add_trace(go.Scattergeo(
-      locationmode = 'USA-states',
-      hovertemplate = data[0],
-      lat = data[1],
-      lon = data[2],
-      marker = dict(
-         sizemode = 'area',
-         size = data[3],
-         line_width = data[4],
-         line_color = 'darkslategrey',
-         color = data[5],
-         symbol = data[6]
-      ),
-      name = stnCode
-   ))
-
-geoFig.update_layout(
-   title_text = 'Weather Stations and Population Centers',
-   showlegend = False,
-   geo = dict(
-      scope = 'usa',
-      landcolor = 'rgb(217, 217, 217)'
-   )
-)
-
-geoFig.show()
-#geoFig.write_html("mapview.html")
+#fig.show()
+fig.write_html("webview.html")
