@@ -31,7 +31,7 @@ __Dependancies:__
 
 *  __Do any cities have multiple weather stations?__
 
-<s>*  _Yes:_ Portland: {'KPWM', 'KPDX'} and Washington: {'KDCA', 'KIAD'}
+*  <s>_Yes:_ Portland: {'KPWM', 'KPDX'} and Washington: {'KDCA', 'KIAD'}</s>
 
 *  <s>_Solution:_ take the average temperature between the two weather stations and use that as one single value for Portland/Washington</s>
 
