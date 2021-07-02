@@ -1,51 +1,7 @@
-'''
-so since location data is included i probably should have realised it could be useful;
-areas without a direct weather station are still some distance from a weather station so we can esimate their temperature by distance to the station
-and this should give us a better population weighted average
-
-            ----------------------
-
-Decided that 'using only this data' means don't look for external temperature information and not that we can't lookup coordinates
-so to improve the data we can manually map some names:
-
-Chicago O'Hare -> Chicago
-Detroit/Wayne -> Detroit
-Phoenix/Sky HRBR -> Phoenix
-Sacramento/Execu -> Sacramento
-St Louis/Lambert -> St. Louis
-Wash DC/Dulles -> Washington      (District Of Columbia)
-
-Raleigh/Durham -> Raleigh
-Raleigh and Durham both have populations and the station practically equidistant to both: choosing Raleigh
-
-Albany
-theres is nowhere close in our data set so ignoring for now. in a model where weather stations are not directly linked to cities we would use the coordinates below
-[ 42.749111, -73.801972 ]
-#https://forecast.weather.gov/MapClick.php?lat=42.7481&lon=-73.8023#.YNtshOhKi70
-
-Windsor Locks -> Springfield
-KBDL is 'Windsor Locks, Bradley International Airport, Connecticuit'
-is actually geographically closest to Springfield Massachusetts
-
-Covington -> Cincinnati
-KCVG is 'Cincinnati/Northern Kentucky International Airport'
-https://forecast.weather.gov/MapClick.php?lat=39.04456&lon=-84.67229#.YNtnJehKi70
-
-
-NYC/LaGuardia -> New York? New York == New York City?
-i'm not familiar with american geography but LaGuardia airport is in 'New York, New York' so this seems like a fine answer
-
-for future reference:
-   https://www.weather.gov/arh/stationlist
-   http://www.weathergraphics.com/identifiers/
-   has exact lat/lon locations for all weather stations
-
-   but again not sure how strict 'only this data' is
-'''
-
 import csv
 from datetime import datetime, timedelta
 from collections import defaultdict
+from os import stat
 import plotly.graph_objects as go
 import math
 from haversine import haversine
@@ -94,7 +50,7 @@ orderedDates = sorted(list(map(lambda x: x.isoformat(), allDatesInRange)))
 
 # Counter for all populations loaded
 totalPop = 0
-# [ [ State (0), population (1), (Lon, Lat) (2) ] ]
+# [ [ City (0), State (1), population (2), (Lat, Lon) (3) ] ]
 cityList = []
 
 with open('data/Population Data.csv', newline='') as csvfile:
@@ -107,7 +63,7 @@ with open('data/Population Data.csv', newline='') as csvfile:
       totalPop += pop
       lon = float(row[3])
       lat = float(row[4])
-      cityList.append([ row[1], pop, (lat, lon) ])
+      cityList.append([ city, row[1], pop, (lat, lon) ])
 
 # Get the date closest to (but in the past) to 'date'
 # If the we reach the earliest date in lookup then get the closest date in the other direction
@@ -151,6 +107,7 @@ def healData(data):
          after = getAfter(dateLookup, m)
 
          # Ensure all gaps in data are only 48 hours (one day missing)
+         # there is also one zero hours at the end of our sample
          dif = after - before
          if dif != (ONE_DAY*2):
             print(data[0][0])
@@ -167,6 +124,9 @@ def healData(data):
          healedData.append(newData)
    return data
 
+
+### second attempt code ###
+
 df = pd.read_csv('data\master-location-identifier-database-202106_standard.csv')
 df.head()
 
@@ -182,29 +142,40 @@ fixedData = []
 weightedPopTotal = 0
 weightedPopList = {}
 
-for [code, lat, lon] in stationLocations:
+#for each station:
+for station in stationLocations:
    popSum = 0
    denom = 0
-   
-   for [_, pop, cityCoord] in cityList:
+   [code, lat, lon] = station
+
+   # For each city
+   # Calculate the sum product for each population vs the distance from the station
+   for [ _, _, pop, cityCoord ] in cityList:
       dist = 1/haversine(cityCoord, (lat, lon))
       popSum += dist*pop
       denom += dist
 
    weightedPop = popSum/denom
    weightedPopTotal += weightedPop
-   weightedPopList[code] = weightedPop
+   station.append(weightedPop)
 
-for [code, lat, lon] in stationLocations:
+for station in stationLocations:
    data = healData(list(filter(lambda x : x[0] == code, temperatureData)))
+   [ code, lat, lon, pop ] = station
 
-   weight = weightedPopList[code]/weightedPopTotal
+   # Newly calculated population for the station divided by total population of all stations
+   weight = pop/weightedPopTotal
+   station.append(weight)
 
+   # Create the new data for each day ( temperature*population/totalPopulation )
    for day in data:
       totalAvg[day[1]] += day[2]*weight
       totalMin[day[1]] += day[3]*weight
       totalMax[day[1]] += day[4]*weight
 
+
+
+#### Graph Drawing #####
 
 theDay = firstDay
 monthAvg = defaultdict(float)
@@ -408,5 +379,77 @@ fig.update_layout(
    ]
 )
 
-#fig.show()
-fig.write_html("webview.html")
+fig.show()
+#fig.write_html("webview.html")
+
+### Show the locations of stations and population centers on a map ###
+# Each population is coloured by which weather station they get their temperature data from
+
+import plotly.express as px
+
+BUBBLE_SCALE = 5000
+UNIQUE_COLORS = (px.colors.qualitative.Plotly)*4
+TOP_LEFT = (47.6205, -122.3509)
+
+# Sort the station codes by distance from the top left most location then map them to a color
+# Creating a graph and applying the 4 color theory would be better for the general case but this works fine for our data
+sortedStnCodes = list(map(lambda x : x[0], sorted(stationLocations, key=lambda x : haversine((x[1], x[2]), TOP_LEFT))))
+colorLookup = { x[0]: x[1] for x in zip(sortedStnCodes, UNIQUE_COLORS) }
+
+mapData = { data[0]: [[],[],[],[],[]] for data in stationLocations }
+
+# Extract the data - starting to wish I'd used pandas from the start
+for [ city, state, population, (lat, lon) ] in cityList:
+   stnCode = sorted(map(lambda c : [c, haversine((c[1], c[2]), (lat, lon))], stationLocations), key=lambda x : x[1])[0][0][0]
+
+   mapData[stnCode][0].append("(" + "{:,.2f}".format(lat) +"," + "{:,.2f}".format(lon) +")<br><b>" + city + ", " + state + "</b><br>" + "{:,.0f}".format(population) + " people<br><i>Closest Station: " + stnCode + "</b></i><extra></extra>")
+   mapData[stnCode][1].append(lat)
+   mapData[stnCode][2].append(lon)
+   mapData[stnCode][3].append(math.sqrt(population)/5)
+   mapData[stnCode][4].append(colorLookup[stnCode])
+
+geoFig = go.Figure()
+
+for stnCode, data in mapData.items():
+   geoFig.add_trace(go.Scattergeo(
+      locationmode = 'USA-states',
+      hovertemplate = data[0],
+      lat = data[1],
+      lon = data[2],
+      marker = dict(
+         sizemode = 'area',
+         size = data[3],
+         line_width = 0.5,
+         line_color = 'darkslategrey',
+         color = data[4],
+         symbol = 'circle'
+      ),
+      name = stnCode
+   ))
+
+geoFig.add_trace(go.Scattergeo(
+   locationmode = 'USA-states',
+   hovertemplate = ["<b>" + x[0] + "</b><br>Weighted Population: " + "{:,.0f}".format(x[3]) + "<br>Weight: " + "{:,.3f}".format(x[4]) + "<extra></extra>" for x in stationLocations],
+   lat = [x[1] for x in stationLocations],
+   lon = [x[2] for x in stationLocations],
+   marker = dict(
+      sizemode = 'area',
+      size = 10,
+      line_width = 2,
+      line_color = 'darkslategrey',
+      color = [colorLookup[x[0]] for x in stationLocations],
+      symbol = 'circle-x'
+   )
+))
+
+geoFig.update_layout(
+   title_text = 'Weather Stations and Population Centers',
+   showlegend = False,
+   geo = dict(
+      scope = 'usa',
+      landcolor = 'rgb(217, 217, 217)'
+   )
+)
+
+#geoFig.show()
+geoFig.write_html("mapview.html")
