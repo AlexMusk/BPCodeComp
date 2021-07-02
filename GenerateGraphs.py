@@ -429,7 +429,7 @@ for stnCode, data in mapData.items():
 
 geoFig.add_trace(go.Scattergeo(
    locationmode = 'USA-states',
-   hovertemplate = ["(" + "{:,.2f}".format(x[1]) +"," + "{:,.2f}".format(x[2]) +")<b>" + x[0] + "</b><br>Weighted Population: " + "{:,.0f}".format(x[3]) + "<br>Weight: " + "{:,.3f}".format(x[4]) + "<extra></extra>" for x in stationLocations],
+   hovertemplate = ["(" + "{:,.2f}".format(x[1]) +"," + "{:,.2f}".format(x[2]) +")<br><b>" + x[0] + "</b><br>Weighted Population: " + "{:,.0f}".format(x[3]) + "<br>Weight: " + "{:,.3f}".format(x[4]) + "<extra></extra>" for x in stationLocations],
    lat = [x[1] for x in stationLocations],
    lon = [x[2] for x in stationLocations],
    marker = dict(
@@ -451,5 +451,5 @@ geoFig.update_layout(
    )
 )
 
-#geoFig.show()
-geoFig.write_html("mapview.html")
+geoFig.show()
+#geoFig.write_html("mapview.html")
